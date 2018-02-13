@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import io
@@ -10,9 +11,9 @@ def main():
     # flags
     UKF = True # use UKF or just gyro data for estimate
     Panorama = True # generate panorama or not
-    Estimate = True # the panorama is based on estimate or ground truth
+    Estimate = True # the panorama is based on estimate or ground truth, must be set as True if no vicon data provided
     # dataset idx
-    idx = 2
+    idx = 11
     # mat file location+prefix
     imu_prefix = "imu/imuRaw"
     vicon_prefix = "vicon/viconRot"
@@ -107,6 +108,9 @@ def load_data(idx, imu_prefix, vicon_prefix):
 
     imu_vals = np.hstack((acc,gyro))
 
+    # vicon not provided
+    if not os.path.exists(vicon_prefix+str(idx)+".mat"):
+        return imu_ts, imu_vals, None, None
     # load vicon
     vicon = io.loadmat(vicon_prefix+str(idx)+".mat")
     vicon_vals = np.array(vicon['rots'])
@@ -121,30 +125,53 @@ def load_data(idx, imu_prefix, vicon_prefix):
     return imu_ts, imu_vals, vicon_ts, vicon_euler
 
 def orientation_plot(idx, imu_ts, ukf_euler, vicon_ts, vicon_euler):
-    # plot YPR time series of estimate and ground truth
-    plt.figure(1)
-    plt.subplot(3, 1, 1)
-    true, = plt.plot(vicon_ts,  vicon_euler[:, 0], 'g', label='Ground Truth')
-    ukf, = plt.plot(imu_ts, ukf_euler[:, 0], 'r', label='UKF Estimate')
-    plt.title('Z-Yaw')
-    plt.ylabel('Angle [rad]')
-    plt.legend(handles=[true, ukf])
+    # no vicon data
+    if vicon_ts is None and vicon_euler is None:
+        plt.figure(1)
+        plt.subplot(3, 1, 1)
+        ukf, = plt.plot(imu_ts, ukf_euler[:, 0], 'r', label='UKF Estimate')
+        plt.title('Z-Yaw')
+        plt.ylabel('Angle [rad]')
+        plt.legend(handles=[ukf])
 
-    plt.subplot(3, 1, 2)
-    true, = plt.plot(vicon_ts, vicon_euler[:, 1], 'g', label='Ground Truth')
-    ukf, = plt.plot(imu_ts, ukf_euler[:, 1], 'r', label='UKF Estimate')
-    plt.title('Y-Pitch')
-    plt.ylabel('Angle [rad]')
-    plt.legend(handles=[true, ukf])
+        plt.subplot(3, 1, 2)
+        ukf, = plt.plot(imu_ts, ukf_euler[:, 1], 'r', label='UKF Estimate')
+        plt.title('Y-Pitch')
+        plt.ylabel('Angle [rad]')
+        plt.legend(handles=[ukf])
 
-    plt.subplot(3, 1, 3)
-    true, = plt.plot(vicon_ts, vicon_euler[:, 2], 'g', label='Ground Truth')
-    ukf, = plt.plot(imu_ts, ukf_euler[:, 2], 'r', label='UKF Estimate')
-    plt.title('X-Roll')
-    plt.ylabel('Angle [rad]')
-    plt.legend(handles=[true, ukf])
+        plt.subplot(3, 1, 3)
+        ukf, = plt.plot(imu_ts, ukf_euler[:, 2], 'r', label='UKF Estimate')
+        plt.title('X-Roll')
+        plt.ylabel('Angle [rad]')
+        plt.legend(handles=[ukf])
 
-    plt.savefig('result/orientation'+str(idx)+'.png')
+        plt.savefig('result/orientation' + str(idx) + '.png')
+
+    else:
+        plt.figure(1)
+        plt.subplot(3, 1, 1)
+        true, = plt.plot(vicon_ts,  vicon_euler[:, 0], 'g', label='Ground Truth')
+        ukf, = plt.plot(imu_ts, ukf_euler[:, 0], 'r', label='UKF Estimate')
+        plt.title('Z-Yaw')
+        plt.ylabel('Angle [rad]')
+        plt.legend(handles=[true, ukf])
+
+        plt.subplot(3, 1, 2)
+        true, = plt.plot(vicon_ts, vicon_euler[:, 1], 'g', label='Ground Truth')
+        ukf, = plt.plot(imu_ts, ukf_euler[:, 1], 'r', label='UKF Estimate')
+        plt.title('Y-Pitch')
+        plt.ylabel('Angle [rad]')
+        plt.legend(handles=[true, ukf])
+
+        plt.subplot(3, 1, 3)
+        true, = plt.plot(vicon_ts, vicon_euler[:, 2], 'g', label='Ground Truth')
+        ukf, = plt.plot(imu_ts, ukf_euler[:, 2], 'r', label='UKF Estimate')
+        plt.title('X-Roll')
+        plt.ylabel('Angle [rad]')
+        plt.legend(handles=[true, ukf])
+
+        plt.savefig('result/orientation'+str(idx)+'.png')
 
 if __name__ == '__main__':
     main()
