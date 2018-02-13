@@ -3,7 +3,7 @@ import numpy as np
 from scipy import io
 from transforms3d import taitbryan
 
-def panorama_2(idx, cam_prefix, imu_ts, ukf_euler):
+def panorama(idx, cam_prefix, imu_ts, ukf_euler):
     # camera projection params
     Wfov = np.pi/3
     Hfov = np.pi/4

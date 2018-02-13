@@ -12,7 +12,7 @@ def main():
     Panorama = True # generate panorama or not
     Estimate = False # the panorama is based on estimate or ground truth
     # dataset idx
-    idx = 1
+    idx = 8
     # mat file location+prefix
     imu_prefix = "imu/imuRaw"
     vicon_prefix = "vicon/viconRot"
@@ -70,9 +70,9 @@ def main():
     # panoramic by image stitching
     if Panorama:
         if Estimate:
-            panorama_2(idx, cam_prefix, imu_ts, ukf_euler)
+            panorama(idx, cam_prefix, imu_ts, ukf_euler)
         else:
-            panorama_2(idx, cam_prefix, vicon_ts, vicon_euler)
+            panorama(idx, cam_prefix, vicon_ts, vicon_euler)
     return 0
 
 def load_data(idx, imu_prefix, vicon_prefix):
