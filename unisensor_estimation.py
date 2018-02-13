@@ -9,10 +9,10 @@ def main():
     ''' modify this part accordingly '''
     # flags
     UKF = True # use UKF or just gyro data for estimate
-    Panorama = True # generate panorama or not
-    Estimate = True # the panorama is based on estimate or ground truth
+    Panorama = False # generate panorama or not
+    Estimate = False # the panorama is based on estimate or ground truth
     # dataset idx
-    idx = 2
+    idx = 8
     # mat file location+prefix
     imu_prefix = "imu/imuRaw"
     vicon_prefix = "vicon/viconRot"
@@ -21,56 +21,41 @@ def main():
     # load data
     imu_ts, imu_vals, vicon_ts, vicon_euler = load_data(idx, imu_prefix, vicon_prefix)
 
-    # Unscented Kalman Filter
     # init
     qk = np.array([1,0,0,0]) # last mean in quaternion
-    Pk = np.identity(3) * 0.1 # last cov in vector
-    Q = np.identity(3) * 2 # process noise cov
-    R = np.identity(3) * 2 # measurement noise cov
 
     time = imu_ts.shape[0]
-    ukf_euler = np.zeros((time, 3))  # represent orientation in euler angles
+    gyro_euler = np.zeros((time, 3))  # represent orientation in euler angles
+    acc_estimate = np.zeros((time, 3))  # represent orientation in euler angles
+    acc_truth = imu_vals[:,:3]
+    g_q = np.array([0,0,0,1])
 
     for t in range(time):
         # extract sensor data
-        acc = imu_vals[t,:3]
         gyro = imu_vals[t,3:]
 
         # Prediction
-        X = compute_sigma_pts(qk, Pk, Q)
-
         if t == time-1: # last iter
             dt = np.mean(imu_ts[-10:] - imu_ts[-11:-1])
         else:
             dt = imu_ts[t+1] - imu_ts[t]
-        Y = process_model(X, gyro, dt)
-
-        q_pred, P_pred, W = prediction(Y, qk)
-
-        if UKF:
-            # Measurement
-            vk, Pvv, Pxz = measurement_model(Y, acc, W, R)
-
-            # Update
-            K = np.dot(Pxz,np.linalg.inv(Pvv)) # Kalman gain
-            qk, Pk = update(q_pred, P_pred, vk, Pvv, K)
-
-        else:
-            # estimate just based on control input gyro
-            qk, Pk = q_pred, P_pred
+        qk = quat_multiply(qk,vec2quat(gyro*dt))
 
         # save for visualization
-        ukf_euler[t, :] = taitbryan.quat2euler(qk)
+        gyro_euler[t, :] = taitbryan.quat2euler(qk)
+        acc_estimate[t, :] = quat_multiply(quat_multiply(quat_inverse(qk), g_q), qk)[1:]
 
-    np.save('result/'+'ukf'+str(idx),ukf_euler)
 
-    # orientation plot UKF + only gyro
-    orientation_plot(idx, imu_ts, ukf_euler, vicon_ts, vicon_euler)
+    # orientation plot gyro
+    orientation_plot(idx, imu_ts, gyro_euler, vicon_ts, vicon_euler)
+
+    # measurement plot acc
+    measurement_plot(idx, imu_ts, acc_estimate, acc_truth)
 
     # panoramic by image stitching
     if Panorama:
         if Estimate:
-            panorama(idx, cam_prefix, imu_ts, ukf_euler)
+            panorama(idx, cam_prefix, imu_ts, gyro_euler)
         else:
             panorama(idx, cam_prefix, vicon_ts, vicon_euler)
     return 0
@@ -120,31 +105,55 @@ def load_data(idx, imu_prefix, vicon_prefix):
 
     return imu_ts, imu_vals, vicon_ts, vicon_euler
 
-def orientation_plot(idx, imu_ts, ukf_euler, vicon_ts, vicon_euler):
-    # plot YPR time series of estimate and ground truth
+def orientation_plot(idx, imu_ts, gyro_euler, vicon_ts, vicon_euler):
     plt.figure(1)
     plt.subplot(3, 1, 1)
     true, = plt.plot(vicon_ts,  vicon_euler[:, 0], 'g', label='Ground Truth')
-    ukf, = plt.plot(imu_ts, ukf_euler[:, 0], 'r', label='UKF Estimate')
+    gyro, = plt.plot(imu_ts, gyro_euler[:, 0], 'b', label='Gyro Estimate')
     plt.title('Z-Yaw')
     plt.ylabel('Angle [rad]')
-    plt.legend(handles=[true, ukf])
+    plt.legend(handles=[true, gyro])
 
     plt.subplot(3, 1, 2)
     true, = plt.plot(vicon_ts, vicon_euler[:, 1], 'g', label='Ground Truth')
-    ukf, = plt.plot(imu_ts, ukf_euler[:, 1], 'r', label='UKF Estimate')
+    gyro, = plt.plot(imu_ts, gyro_euler[:, 1], 'b', label='Gyro Estimate')
     plt.title('Y-Pitch')
     plt.ylabel('Angle [rad]')
-    plt.legend(handles=[true, ukf])
+    plt.legend(handles=[true, gyro])
 
     plt.subplot(3, 1, 3)
     true, = plt.plot(vicon_ts, vicon_euler[:, 2], 'g', label='Ground Truth')
-    ukf, = plt.plot(imu_ts, ukf_euler[:, 2], 'r', label='UKF Estimate')
+    gyro, = plt.plot(imu_ts, gyro_euler[:, 2], 'b', label='Gyro Estimate')
     plt.title('X-Roll')
     plt.ylabel('Angle [rad]')
-    plt.legend(handles=[true, ukf])
+    plt.legend(handles=[true, gyro])
 
-    plt.savefig('result/orientation'+str(idx)+'.png')
+    plt.savefig('result/uni_orientation'+str(idx)+'.png')
+
+def measurement_plot(idx, imu_ts, acc_estimate, acc_truth):
+    plt.figure(2)
+    plt.subplot(3, 1, 1)
+    true, = plt.plot(imu_ts,  acc_truth[:, 0], 'g', label='acc truth')
+    est, = plt.plot(imu_ts, acc_estimate[:, 0], 'b', label='acc estimate')
+    plt.title('X')
+    plt.ylabel('g/s')
+    plt.legend(handles=[true,est])
+
+    plt.subplot(3, 1, 2)
+    true, = plt.plot(imu_ts, acc_truth[:, 1], 'g', label='acc truth')
+    est, = plt.plot(imu_ts, acc_estimate[:, 1], 'b', label='acc estimate')
+    plt.title('Y')
+    plt.ylabel('g/s')
+    plt.legend(handles=[true,est])
+
+    plt.subplot(3, 1, 3)
+    true, = plt.plot(imu_ts, acc_truth[:, 2], 'g', label='acc truth')
+    est, = plt.plot(imu_ts, acc_estimate[:, 2], 'b', label='acc estimate')
+    plt.title('Z')
+    plt.ylabel('g/s')
+    plt.legend(handles=[true,est])
+
+    plt.savefig('result/uni_measurement'+str(idx)+'.png')
 
 if __name__ == '__main__':
     main()
