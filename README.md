@@ -1,4 +1,4 @@
-# UPenn ESE 650 Learning in Robotics, Project2
+# UPenn ESE650 Learning in Robotics, Project2
 
 1. Put imu .mat file into folder .\imu  
    Put vicon .mat file into folder .\vicon  
